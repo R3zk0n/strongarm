@@ -40,6 +40,7 @@ from strongarm.macho.macho_load_commands import MachoLoadCommands
 
 if TYPE_CHECKING:
     from strongarm.macho.codesign import CodesignParser
+    from strongarm.macho.swift_metadata_parser import SwiftMetadataParser
 
 logger = strongarm_logger.getChild(__file__)
 
@@ -195,6 +196,8 @@ class MachoBinary:
         self.__minimum_deployment_target: Optional[LooseVersion] = None
         self.__sdk_deployment_target: Optional[LooseVersion] = None
         self.__build_tools: Dict[str, LooseVersion] = {}
+
+        self.__swift_metadata_parser: Optional["SwiftMetadataParser"] = None
 
         # This kicks off the parse of the binary
         if not self.parse():
@@ -881,6 +884,41 @@ class MachoBinary:
 
             self.__codesign_parser = CodesignParser(self)
         return self.__codesign_parser
+
+    @property
+    def swift_metadata(self) -> Optional["SwiftMetadataParser"]:
+        """Lazy-load and return the Swift metadata parser."""
+        if not self.__swift_metadata_parser:
+            # Check if binary has Swift metadata sections
+            if self._has_swift5_metadata():
+                try:
+                    from strongarm.macho.swift_metadata_parser import SwiftMetadataParser
+                    self.__swift_metadata_parser = SwiftMetadataParser(self)
+                except Exception as e:
+                    logger.warning(f"Failed to parse Swift metadata: {e}")
+                    return None
+        return self.__swift_metadata_parser
+
+    def _has_swift2_metadata(self) -> bool:
+        """Check if the binary contains Swift3 metadata sections."""
+        swift2_sections = [
+            "__swift2_types",
+            "__swift2_values",
+            "__swift2_rebased_pointers",
+            "__swift2_rebase",
+            "__swift2_codesign_parser"
+        ]
+        return any(self.section_with_name(section, "__TEXT") for section in swift2_sections)
+
+    def _has_swift5_metadata(self) -> bool:
+        """Check if the binary contains Swift metadata sections."""
+        swift_sections = [
+            "__swift5_types",
+            "__swift5_proto",
+            "__swift5_fieldmd",
+        ]
+        return any(self.section_with_name(section, "__TEXT") for section in swift_sections)
+
 
     def get_entitlements(self) -> Optional[bytearray]:
         """Read the entitlements the binary was signed with."""

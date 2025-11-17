@@ -29,6 +29,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 
 if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
+    from strongarm.macho.swift_metadata_parser import SwiftType
 
 logger = strongarm_logger.getChild(__file__)
 
@@ -437,6 +438,39 @@ class MachoAnalyzer:
     def get_conformed_protocols(self) -> List[ObjcProtocol]:
         """Return the List of protocols to which code within the binary conforms."""
         return self.objc_helper.protocols
+
+    # ADD YOUR SWIFT METHODS HERE (after line ~283)
+    def swift_types(self) -> List["SwiftType"]:
+        """Return the List of Swift types defined in the binary."""
+        if self.binary.swift_metadata:
+            return self.binary.swift_metadata.types
+        return []
+
+    def swift_classes(self) -> List["SwiftType"]:
+        """Return the List of Swift classes defined in the binary."""
+        if self.binary.swift_metadata:
+            return self.binary.swift_metadata.get_classes()
+        return []
+
+    def swift_structs(self) -> List["SwiftType"]:
+        """Return the List of Swift structs defined in the binary."""
+        if self.binary.swift_metadata:
+            return self.binary.swift_metadata.get_structs()
+        return []
+
+    def swift_enums(self) -> List["SwiftType"]:
+        """Return the List of Swift enums defined in the binary."""
+        if self.binary.swift_metadata:
+            return self.binary.swift_metadata.get_enums()
+        return []
+
+    # Existing code continues below with @property dyld_bound_symbols...
+    @property
+    def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
+        """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime."""
+        return self.binary.dyld_bound_symbols
+
+
 
     @property
     def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:

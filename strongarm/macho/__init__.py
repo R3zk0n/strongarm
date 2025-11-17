@@ -95,6 +95,13 @@ from .objc_runtime_data_parser import (
     ObjcSelref,
 )
 
+from .swift_metadata_parser import (
+    SwiftField,
+    SwiftFieldDescriptorKind,
+    SwiftMetadataParser,
+    SwiftType,
+)
+
 __all__ = [
     "ArchIndependentStructure",
     "CFStringStruct",
@@ -179,6 +186,10 @@ __all__ = [
     "StaticFilePointer",
     "VirtualMemoryPointer",
     "swap32",
+    "SwiftField",
+    "SwiftFieldDescriptorKind",
+    "SwiftMetadataParser",
+    "SwiftType",
     "MachoStringTableEntry",
     "MachoStringTableHelper",
     "ArchitectureNotSupportedError",
