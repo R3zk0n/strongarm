@@ -439,30 +439,179 @@ class SwiftMetadataParser:
     # Name Demangling
     # ========================================================================
 
+    # Common Swift standard library type abbreviations
+    _SWIFT_BUILTIN_TYPES: Dict[str, str] = {
+        "SS": "String",
+        "Si": "Int",
+        "Su": "UInt",
+        "Sb": "Bool",
+        "Sf": "Float",
+        "Sd": "Double",
+        "Sc": "Character",
+        "SV": "UnsafeRawPointer",
+        "Sv": "UnsafeMutableRawPointer",
+        "SP": "UnsafePointer",
+        "Sp": "UnsafeMutablePointer",
+        "SR": "UnsafeBufferPointer",
+        "Sr": "UnsafeMutableBufferPointer",
+        "Sa": "Array",
+        "SD": "Dictionary",
+        "Sh": "Set",
+        "Sq": "Optional",
+        "SQ": "ImplicitlyUnwrappedOptional",
+        "s5Int8V": "Int8",
+        "s6Int16V": "Int16",
+        "s6Int32V": "Int32",
+        "s6Int64V": "Int64",
+        "s6UInt8V": "UInt8",
+        "s7UInt16V": "UInt16",
+        "s7UInt32V": "UInt32",
+        "s7UInt64V": "UInt64",
+        "s7Float32V": "Float32",
+        "s7Float64V": "Float64",
+    }
+
+    def _is_mangled_swift_name(self, name: str) -> bool:
+        return any(name.startswith(prefix) for prefix in ("$s", "_T", "_$s"))
+
     def _demangle_swift_name(self, mangled_name: str) -> str:
         """
         Attempt to demangle a Swift symbol name.
 
-        This is a placeholder - integrate swift-demangle for production use.
+        Uses built-in demangling for common types and falls back to
+        swift-demangle command-line tool for complex names.
 
         Args:
-            mangled_name: Mangled Swift name (e.g., "$s4Test6PersonV")
+            mangled_name: Mangled Swift name (e.g., "$s4Test6PersonV", "SS")
 
         Returns:
             Demangled name, or original if demangling failed
         """
-        # TODO: Integrate swift-demangle subprocess or binding
-        # import subprocess
-        # try:
-        #     result = subprocess.check_output(
-        #         ["swift-demangle", "-compact", mangled_name],
-        #         stderr=subprocess.DEVNULL,
-        #         timeout=1
-        #     ).decode().strip()
-        #     if result and result != mangled_name:
-        #         return result
-        # except Exception:
-        #     pass
+        if not mangled_name:
+            return mangled_name
+
+        # Check for direct builtin type matches
+        if mangled_name in self._SWIFT_BUILTIN_TYPES:
+            return self._SWIFT_BUILTIN_TYPES[mangled_name]
+
+        # Try built-in demangling first
+        demangled = self._builtin_demangle(mangled_name)
+        if demangled != mangled_name:
+            return demangled
+
+        # Fall back to swift-demangle tool if available
+        demangled = self._swift_demangle_tool(mangled_name)
+        if demangled != mangled_name:
+            return demangled
+
+        return mangled_name
+
+    def _builtin_demangle(self, mangled_name: str) -> str:
+        """
+        Built-in demangling for common Swift name patterns.
+
+        Args:
+            mangled_name: Mangled Swift name
+
+        Returns:
+            Demangled name, or original if not recognized
+        """
+        # Handle standard library type references (e.g., "SS" -> "String")
+        if mangled_name in self._SWIFT_BUILTIN_TYPES:
+            return self._SWIFT_BUILTIN_TYPES[mangled_name]
+
+        # Handle mangled names with prefixes like "$s", "_$s", "_T"
+        name = mangled_name
+        if name.startswith("_$s"):
+            name = name[3:]
+        elif name.startswith("$s"):
+            name = name[2:]
+        elif name.startswith("_T"):
+            name = name[2:]
+
+        # Try to parse simple type names (e.g., "4Test6PersonV" -> "Test.Person")
+        result = self._parse_simple_mangled_name(name)
+        if result:
+            return result
+
+        return mangled_name
+
+    def _parse_simple_mangled_name(self, name: str) -> Optional[str]:
+        """
+        Parse simple mangled names with length-prefixed components.
+
+        Swift mangles names like "4Test6PersonV" where:
+        - 4Test = module name "Test" (4 chars)
+        - 6Person = type name "Person" (6 chars)
+        - V = struct suffix (C = class, O = enum)
+
+        Args:
+            name: Mangled name without prefix
+
+        Returns:
+            Demangled name or None if parsing failed
+        """
+        if not name:
+            return None
+
+        components = []
+        i = 0
+
+        while i < len(name):
+            # Check for type suffix at end
+            if name[i] in ('V', 'C', 'O') and i == len(name) - 1:
+                break
+
+            # Parse length-prefixed identifier
+            if name[i].isdigit():
+                # Read the length
+                length_str = ""
+                while i < len(name) and name[i].isdigit():
+                    length_str += name[i]
+                    i += 1
+
+                if not length_str:
+                    return None
+
+                length = int(length_str)
+                if i + length > len(name):
+                    return None
+
+                # Extract the identifier
+                identifier = name[i:i + length]
+                components.append(identifier)
+                i += length
+            else:
+                # Unknown character, stop parsing
+                break
+
+        if components:
+            return ".".join(components)
+
+        return None
+
+    def _swift_demangle_tool(self, mangled_name: str) -> str:
+        """
+        Use swift-demangle command-line tool for demangling.
+
+        Args:
+            mangled_name: Mangled Swift name
+
+        Returns:
+            Demangled name, or original if tool unavailable/failed
+        """
+        import subprocess
+
+        try:
+            result = subprocess.check_output(
+                ["swift-demangle", "-compact", mangled_name],
+                stderr=subprocess.DEVNULL,
+                timeout=1
+            ).decode().strip()
+            if result and result != mangled_name:
+                return result
+        except (subprocess.SubprocessError, FileNotFoundError, OSError):
+            pass
 
         return mangled_name
 

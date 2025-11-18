@@ -98,20 +98,48 @@ def test_swift_parsing(binary_path: str):
         print(f"Header Info:           {(parser.binary.file_offset)}")
 
 
+
         if parser.types:
             print(f"\n{'=' * 80}")
+            print(f"Parsed Types (showing mangled -> demangled):")
             print(f"{'=' * 80}")
             for i, swift_type in enumerate(parser.types[:100], 1):
                 kind_str = swift_type.kind.name.lower() if swift_type.kind else "unknown"
                 field_count = len(swift_type.fields)
-                print(f"{i:2d}. [{kind_str:6s}] {swift_type.name} ({field_count} fields)")
 
-                # Show first 3 fields if available
+                # Show demangling result
+                if swift_type.mangled_name != swift_type.name:
+                    print(f"{i:2d}. [{kind_str:6s}] {swift_type.name} ({field_count} fields)")
+                    print(f"     Mangled: {swift_type.mangled_name}")
+                else:
+                    print(f"{i:2d}. [{kind_str:6s}] {swift_type.name} ({field_count} fields) [not demangled]")
+
+                # Show fields with demangling info
                 for field in swift_type.fields[:100]:
-                    print(f"     └─ {field}")
+                    var_let = "var" if field.is_var else "let"
+                    if field.mangled_type_name != field.demangled_type_name:
+                        print(f"     └─ {var_let} {field.name}: {field.demangled_type_name}")
+                        print(f"        (mangled: {field.mangled_type_name})")
+                    else:
+                        print(f"     └─ {var_let} {field.name}: {field.demangled_type_name} [not demangled]")
 
                 if len(swift_type.fields) > 100:
-                    print(f"     └─ ... and {len(swift_type.fields) - 30} more fields")
+                    print(f"     └─ ... and {len(swift_type.fields) - 100} more fields")
+
+            # Demangling statistics
+            print(f"\n{'=' * 80}")
+            print(f"Demangling Statistics:")
+            print(f"{'=' * 80}")
+            types_demangled = sum(1 for t in parser.types if t.mangled_name != t.name)
+            total_fields = sum(len(t.fields) for t in parser.types)
+            fields_demangled = sum(
+                1 for t in parser.types
+                for f in t.fields
+                if f.mangled_type_name != f.demangled_type_name
+            )
+            print(f"Type names demangled:  {types_demangled}/{len(parser.types)}")
+            print(f"Field types demangled: {fields_demangled}/{total_fields}")
+
         else:
             print("\n⚠ No types were parsed. Possible reasons:")
             print("  1. Section exists but is empty")
