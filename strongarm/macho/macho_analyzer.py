@@ -464,14 +464,6 @@ class MachoAnalyzer:
             return self.binary.swift_metadata.get_enums()
         return []
 
-    # Existing code continues below with @property dyld_bound_symbols...
-    @property
-    def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
-        """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime."""
-        return self.binary.dyld_bound_symbols
-
-
-
     @property
     def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime."""

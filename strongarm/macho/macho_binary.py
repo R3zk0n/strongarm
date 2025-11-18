@@ -222,7 +222,7 @@ class MachoBinary:
             # and rebases.
             # However, not all binaries contain the LC_DYLD_INFO load command: fully statically linked binaries
             # (which are very rare) will not contain LC_DYLD_INFO.
-            self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
+            self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)  # type: ignore[unreachable]
 
     def __repr__(self) -> str:
         return f"<MachoBinary binary={self.path}>"
