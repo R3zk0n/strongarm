@@ -7,9 +7,11 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+# Least privilege for GITHUB_TOKEN
 permissions:
   contents: read
 
+# Do not waste runners on stale pushes
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,7 +20,7 @@ jobs:
   lint:
     name: Code linting
     runs-on: ubuntu-latest
-    # Skip lint on manual trigger if you only care about tests there
+    # Optional: do not run lint for manual workflow_dispatch, only tests
     if: github.event_name != 'workflow_dispatch'
 
     steps:
@@ -28,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'   # <- was 3.7
+          python-version: '3.10'
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -43,19 +45,19 @@ jobs:
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: |
-          pip install -U 'pip<23.2' wheel setuptools 'pip-tools<7.0.0'
+          pip install -U 'pip<23.2' wheel 'setuptools==68.2.2' 'packaging>=23.2' 'pip-tools<7.0.0'
           pip-sync requirements.txt requirements-dev.txt
 
       - name: Project install (invoke)
         shell: bash
         run: invoke install
 
-      - name: Autoformat + lint
+      - name: Autoformat and lint
         shell: bash
         run: invoke autoformat-lint
 
   test_pip_sync:
-    name: Test (via pip-sync / invoke)
+    name: Test (via pip-sync and invoke)
     runs-on: ubuntu-latest
 
     steps:
@@ -65,7 +67,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'   # <- was 3.7
+          python-version: '3.10'
 
       - name: Install system packages
         shell: bash
@@ -90,7 +92,7 @@ jobs:
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: |
-          pip install -U 'pip<23.2' wheel setuptools 'pip-tools<7.0.0'
+          pip install -U 'pip<23.2' wheel 'setuptools==68.2.2' 'packaging>=23.2' 'pip-tools<7.0.0'
           pip-sync requirements.txt requirements-dev.txt
 
       - name: Project install (invoke)
@@ -112,7 +114,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'   # <- was 3.7
+          python-version: '3.10'
 
       - name: Install system packages
         shell: bash
@@ -127,15 +129,17 @@ jobs:
       - name: Cache pip
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip-setuptools-${{ hashFiles('setup.py') }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-setuptools-${{ hashFiles('setup.py') }}
           restore-keys: |
             ${{ runner.os }}-pip-setuptools-
 
-      - name: Install Python tools
+      - name: Install Python tools and build deps
         shell: bash
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: |
+          pip install -U 'pip<23.2' wheel 'setuptools==68.2.2' 'packaging>=23.2'
           pip install invoke mypy flake8 pytest pytest-xdist
 
       - name: Version info
