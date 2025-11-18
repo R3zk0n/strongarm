@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [ main, master ]
 
+# Least privilege: default token can only read contents
+permissions:
+  contents: read
+
+# Kill old runs on the same branch to avoid wasting runners
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Code linting
@@ -18,7 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.7'  # or bump to 3.8+ if you decide to modernise
+          python-version: '3.7'  # bump to 3.8+ when your deps allow it
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -29,15 +38,20 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install lint deps
+        shell: bash
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: |
           pip install -U 'pip<23.2' wheel setuptools 'pip-tools<7.0.0'
           pip-sync requirements.txt requirements-dev.txt
 
       - name: Project install (invoke)
+        shell: bash
         run: |
           invoke install
 
       - name: Autoformat + lint
+        shell: bash
         run: |
           invoke autoformat-lint
 
@@ -55,9 +69,10 @@ jobs:
           python-version: '3.7'
 
       - name: Install system packages
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             libcapstone4 \
             libcapstone-dev \
             sqlite3 \
@@ -72,15 +87,20 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install Python deps (pip-sync)
+        shell: bash
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: |
           pip install -U 'pip<23.2' wheel setuptools 'pip-tools<7.0.0'
           pip-sync requirements.txt requirements-dev.txt
 
       - name: Project install (invoke)
+        shell: bash
         run: |
           invoke install
 
       - name: Run tests (invoke)
+        shell: bash
         run: |
           invoke test
 
@@ -98,9 +118,10 @@ jobs:
           python-version: '3.7'
 
       - name: Install system packages
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             libcapstone4 \
             libcapstone-dev \
             sqlite3 \
@@ -115,18 +136,24 @@ jobs:
             ${{ runner.os }}-pip-setuptools-
 
       - name: Install Python tools
+        shell: bash
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: |
           pip install invoke mypy flake8 pytest pytest-xdist
 
       - name: Version info
+        shell: bash
         run: |
           python --version
           pip --version
 
       - name: Install package (setuptools path)
+        shell: bash
         run: |
           pip install .
 
       - name: Run tests (invoke)
+        shell: bash
         run: |
           invoke test
