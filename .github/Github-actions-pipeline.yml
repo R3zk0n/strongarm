@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  lint:
+    name: Code linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.7'  # or bump to 3.8+ if you decide to modernise
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install lint deps
+        run: |
+          pip install -U 'pip<23.2' wheel setuptools 'pip-tools<7.0.0'
+          pip-sync requirements.txt requirements-dev.txt
+
+      - name: Project install (invoke)
+        run: |
+          invoke install
+
+      - name: Autoformat + lint
+        run: |
+          invoke autoformat-lint
+
+  test_pip_sync:
+    name: Test (via pip-sync / invoke)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.7'
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcapstone4 \
+            libcapstone-dev \
+            sqlite3 \
+            libsqlite3-dev
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python deps (pip-sync)
+        run: |
+          pip install -U 'pip<23.2' wheel setuptools 'pip-tools<7.0.0'
+          pip-sync requirements.txt requirements-dev.txt
+
+      - name: Project install (invoke)
+        run: |
+          invoke install
+
+      - name: Run tests (invoke)
+        run: |
+          invoke test
+
+  test_setuptools:
+    name: Test (via setuptools)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.7'
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcapstone4 \
+            libcapstone-dev \
+            sqlite3 \
+            libsqlite3-dev
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-setuptools-${{ hashFiles('setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-setuptools-
+
+      - name: Install Python tools
+        run: |
+          pip install invoke mypy flake8 pytest pytest-xdist
+
+      - name: Version info
+        run: |
+          python --version
+          pip --version
+
+      - name: Install package (setuptools path)
+        run: |
+          pip install .
+
+      - name: Run tests (invoke)
+        run: |
+          invoke test
