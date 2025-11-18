@@ -5,12 +5,11 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:      # <-- NEW: allows manual triggers
 
-# Least privilege: default token can only read contents
 permissions:
   contents: read
 
-# Kill old runs on the same branch to avoid wasting runners
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -19,6 +18,8 @@ jobs:
   lint:
     name: Code linting
     runs-on: ubuntu-latest
+    # Do NOT run lint during a manual trigger
+    if: github.event_name != 'workflow_dispatch'
 
     steps:
       - name: Checkout
@@ -27,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.7'  # bump to 3.8+ when your deps allow it
+          python-version: '3.7'
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -47,18 +48,17 @@ jobs:
 
       - name: Project install (invoke)
         shell: bash
-        run: |
-          invoke install
+        run: invoke install
 
       - name: Autoformat + lint
         shell: bash
-        run: |
-          invoke autoformat-lint
+        run: invoke autoformat-lint
 
   test_pip_sync:
     name: Test (via pip-sync / invoke)
     runs-on: ubuntu-latest
 
+    # Always run tests for push/PR/manual
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,13 +96,11 @@ jobs:
 
       - name: Project install (invoke)
         shell: bash
-        run: |
-          invoke install
+        run: invoke install
 
       - name: Run tests (invoke)
         shell: bash
-        run: |
-          invoke test
+        run: invoke test
 
   test_setuptools:
     name: Test (via setuptools)
@@ -150,10 +148,8 @@ jobs:
 
       - name: Install package (setuptools path)
         shell: bash
-        run: |
-          pip install .
+        run: pip install .
 
       - name: Run tests (invoke)
         shell: bash
-        run: |
-          invoke test
+        run: invoke test
