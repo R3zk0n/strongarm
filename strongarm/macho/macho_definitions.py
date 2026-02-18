@@ -738,6 +738,16 @@ class MachoDyldChainedStartsInImageRaw(Structure):
         # ("seg_info_offset", c_uint32 * 1),
     ]
 
+class MachoDyldChainedPtrArm64eRebaseRaw(Structure):
+    # auth=0, bind=0
+    _fields_ = [
+        ("target", c_uint64, 43),
+        ("high8", c_uint64, 8),
+        ("next", c_uint64, 12),
+        ("bind", c_uint64, 1),
+    ]
+
+
 
 class MachoDyldChainedStartsInSegmentRaw(Structure):
     # XXX(PT): Force alignment to uint16_t, as by default this structure is reported as being 2 bytes too big
@@ -785,6 +795,8 @@ class MachoDyldChainedPtrFormat(IntEnum):
     PT: Only model a subset for now so it's clear when we encounter binaries breaking our assumptions
     Ref: https://opensource.apple.com/source/dyld/dyld-851.27/include/mach-o/fixup-chains.h.auto.html
     """
+    # Packed Chain PTR on ARM64e
+    DYLD_CHAINED_PTR_ARM64E = 1
 
     # Packed target is a virtual memory address
     DYLD_CHAINED_PTR_64 = 2
@@ -823,6 +835,50 @@ class MachoDyldChainedPtr64BindRaw(Structure):
         ("bind", c_uint64, 1),
     ]
 
+class MachoDyldChainedPtrArm64eRebaseRaw(Structure):
+    # auth=0, bind=0
+    _fields_ = [
+        ("target", c_uint64, 43),
+        ("high8", c_uint64, 8),
+        ("next", c_uint64, 12),
+        ("bind", c_uint64, 1),
+    ]
+
+
+class MachoDyldChainedPtrArm64eBindRaw(Structure):
+    # auth=0, bind=1
+    _fields_ = [
+        ("ordinal", c_uint64, 16),
+        ("zero", c_uint64, 16),
+        ("addend", c_uint64, 19),
+        ("next", c_uint64, 12),
+        ("bind", c_uint64, 1),
+    ]
+
+
+class MachoDyldChainedPtrArm64eAuthRebaseRaw(Structure):
+    # auth=1, bind=0
+    _fields_ = [
+        ("target", c_uint64, 32),
+        ("diversity", c_uint64, 16),
+        ("addr_div", c_uint64, 1),
+        ("key", c_uint64, 2),
+        ("next", c_uint64, 12),
+        ("bind", c_uint64, 1),
+    ]
+
+
+class MachoDyldChainedPtrArm64eAuthBindRaw(Structure):
+    # auth=1, bind=1
+    _fields_ = [
+        ("ordinal", c_uint64, 16),
+        ("zero", c_uint64, 16),
+        ("diversity", c_uint64, 16),
+        ("addr_div", c_uint64, 1),
+        ("key", c_uint64, 2),
+        ("next", c_uint64, 12),
+        ("bind", c_uint64, 1),
+    ]
 
 class BindSpecialDylibOrdinal(IntEnum):
     BIND_SPECIAL_DYLIB_SELF = 0

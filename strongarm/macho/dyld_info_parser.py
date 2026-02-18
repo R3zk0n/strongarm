@@ -15,6 +15,11 @@ from .arch_independent_structs import (
     MachoDyldChainedPtr64Rebase,
     MachoDyldChainedStartsInImage,
     MachoDyldChainedStartsInSegment,
+    MachoDyldChainedPtrArm64eRebase,
+    MachoDyldChainedPtrArm64eBind,
+    MachoDyldChainedPtrArm64eAuthRebase,
+    MachoDyldChainedPtrArm64eAuthBind,
+
 )
 from .macho_binary import DynamicLibrary, MachoBinary
 from .macho_definitions import (
@@ -236,60 +241,109 @@ class DyldInfoParser:
 
     @staticmethod
     def _process_fixup_pointer_chain(
-        binary: MachoBinary,
-        dyld_bound_symbols_table: List[DyldBoundSymbol],
-        chain_base: VirtualMemoryPointer,
-        pointer_format: MachoDyldChainedPtrFormat,
+            binary: MachoBinary,
+            dyld_bound_symbols_table: List[DyldBoundSymbol],
+            chain_base: VirtualMemoryPointer,
+            pointer_format: MachoDyldChainedPtrFormat,
     ) -> Tuple[Dict[VirtualMemoryPointer, VirtualMemoryPointer], Dict[VirtualMemoryPointer, DyldBoundSymbol]]:
         rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
         dyld_bound_addresses_to_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
         virtual_base = binary.get_virtual_base()
-        # As each fixup pointer will tell us whether there are any more to follow, loop forever
-        # XXX(PT): Impose an upper bound on this loop, just in case
+
         for _ in range(10000):
-            chained_rebase_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Rebase)
-            # Rebase or bind?
-            if chained_rebase_ptr.bind == 1:
-                # Bind. Keep track that there is an imported symbol bind here
-                chained_bind_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Bind)
-                ordinal = int24_from_value(chained_bind_ptr.ordinal)
-                bound_symbol = dyld_bound_symbols_table[ordinal]
-                logger.debug(
-                    f"\t\t{hex(chain_base)}: BIND\tordinal {ordinal}\t"
-                    f"addend {chained_bind_ptr.addend}\treserved {chained_bind_ptr.reserved}\t"
-                    f"next {chained_bind_ptr.next}\tsymbol {bound_symbol.name}\t\t"
-                    f"dylib {binary.dylib_name_for_library_ordinal(bound_symbol.library_ordinal)}"
-                )
-                dyld_bound_addresses_to_symbols[chain_base + virtual_base] = bound_symbol
-                chain_base += chained_bind_ptr.next * 4
-            else:
-                # Rebase. Keep track that there's a rebased pointer here
-                chained_ptr_raw = binary.read_word(chain_base, word_type=c_uint64, virtual=False)
-                logger.debug(
-                    f"\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) "
-                    f"target={StaticFilePointer(chained_rebase_ptr.target)}"
-                )
-                # The pointer format within this chain tells us how to interpret the target field
-                if pointer_format == MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64_OFFSET:
-                    # The target field stores an offset from the virtual base rather than an absolute address
-                    rebase_target = virtual_base + chained_rebase_ptr.target
-                elif pointer_format == MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64:
-                    # The target field stores an absolute virtual address
-                    rebase_target = chained_rebase_ptr.target
+
+            if pointer_format == MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_ARM64E:
+                raw_value = binary.read_word(chain_base, word_type=c_uint64, virtual=False)
+                is_auth = (raw_value >> 63) & 1
+                is_bind = (raw_value >> 62) & 1
+                next_delta = (raw_value >> 51) & 0x7FF
+
+                if is_bind:
+                    ordinal = raw_value & 0xFFFF
+                    if is_auth:
+                        diversity = (raw_value >> 32) & 0xFFFF
+                        addr_div = (raw_value >> 48) & 1
+                        key = (raw_value >> 49) & 3
+                        logger.debug(
+                            f"\t\t{hex(chain_base)}: ARM64E_AUTH_BIND\tordinal {ordinal}\t"
+                            f"diversity {diversity}\tkey {key}\tnext {next_delta}"
+                        )
+                    else:
+                        addend = (raw_value >> 32) & 0x7FFFF
+                        logger.debug(
+                            f"\t\t{hex(chain_base)}: ARM64E_BIND\tordinal {ordinal}\t"
+                            f"addend {addend}\tnext {next_delta}"
+                        )
+                    bound_symbol = dyld_bound_symbols_table[ordinal]
+                    dyld_bound_addresses_to_symbols[chain_base + virtual_base] = bound_symbol
                 else:
-                    raise NotImplementedError(f"Unsupported chained pointer format: {pointer_format}")
+                    if is_auth:
+                        target = raw_value & 0xFFFFFFFF
+                        diversity = (raw_value >> 32) & 0xFFFF
+                        addr_div = (raw_value >> 48) & 1
+                        key = (raw_value >> 49) & 3
+                        rebase_target = virtual_base + target
+                        logger.debug(
+                            f"\t\t{hex(chain_base)}: ARM64E_AUTH_REBASE(raw: {hex(raw_value)}) "
+                            f"target={hex(target)}\tdiversity={diversity}\tkey={key}\t"
+                            f"resolved={hex(rebase_target)}"
+                        )
+                    else:
+                        target = raw_value & 0x7FFFFFFFFFF
+                        high8 = (raw_value >> 43) & 0xFF
+                        rebase_target = (high8 << 56) | target
+                        logger.debug(
+                            f"\t\t{hex(chain_base)}: ARM64E_REBASE(raw: {hex(raw_value)}) "
+                            f"target={hex(target)}\thigh8={hex(high8)}\t"
+                            f"resolved={hex(rebase_target)}"
+                        )
+                    rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(
+                        rebase_target)
 
-                rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(rebase_target)
-                chain_base += chained_rebase_ptr.next * 4
+                chain_base += next_delta * 8
 
-            # Reached the end of the chain?
-            if chained_rebase_ptr.next == 0:
+            elif pointer_format in (
+                    MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64,
+                    MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64_OFFSET,
+            ):
+                chained_rebase_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Rebase)
+                if chained_rebase_ptr.bind == 1:
+                    chained_bind_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Bind)
+                    ordinal = int24_from_value(chained_bind_ptr.ordinal)
+                    bound_symbol = dyld_bound_symbols_table[ordinal]
+                    logger.debug(
+                        f"\t\t{hex(chain_base)}: BIND\tordinal {ordinal}\t"
+                        f"addend {chained_bind_ptr.addend}\treserved {chained_bind_ptr.reserved}\t"
+                        f"next {chained_bind_ptr.next}\tsymbol {bound_symbol.name}\t\t"
+                        f"dylib {binary.dylib_name_for_library_ordinal(bound_symbol.library_ordinal)}"
+                    )
+                    dyld_bound_addresses_to_symbols[chain_base + virtual_base] = bound_symbol
+                    next_delta = chained_bind_ptr.next
+                else:
+                    chained_ptr_raw = binary.read_word(chain_base, word_type=c_uint64, virtual=False)
+                    logger.debug(
+                        f"\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) "
+                        f"target={StaticFilePointer(chained_rebase_ptr.target)}"
+                    )
+                    if pointer_format == MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64_OFFSET:
+                        rebase_target = virtual_base + chained_rebase_ptr.target
+                    elif pointer_format == MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64:
+                        rebase_target = chained_rebase_ptr.target
+                    rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(
+                        rebase_target)
+                    next_delta = chained_rebase_ptr.next
+
+                chain_base += next_delta * 4
+
+            else:
+                raise NotImplementedError(f"Unsupported chained pointer format: {pointer_format}")
+
+            if next_delta == 0:
                 break
         else:
             raise ValueError("Failed to find end of fixup pointer chain")
 
         return rebased_pointers, dyld_bound_addresses_to_symbols
-
     @staticmethod
     def read_uleb(data: bytearray, offset: int) -> Tuple[int, int]:
         byte = data[offset]

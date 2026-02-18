@@ -18,6 +18,10 @@ from strongarm.macho.macho_definitions import (
     MachoDyldChainedStartsInImageRaw,
     MachoDyldChainedStartsInSegmentRaw,
     MachoDyldInfoCommand,
+    MachoDyldChainedPtrArm64eRebaseRaw,
+    MachoDyldChainedPtrArm64eBindRaw,
+    MachoDyldChainedPtrArm64eAuthRebaseRaw,
+    MachoDyldChainedPtrArm64eAuthBindRaw,
     MachoDysymtabCommand,
     MachoEncryptionInfo32Command,
     MachoEncryptionInfo64Command,
@@ -103,6 +107,10 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type[MachoNlist64],
     Type[MachoLoadCommand],
     Type[MachoSymtabCommand],
+    Type[MachoDyldChainedPtrArm64eRebaseRaw],
+    Type[MachoDyldChainedPtrArm64eBindRaw],
+    Type[MachoDyldChainedPtrArm64eAuthRebaseRaw],
+    Type[MachoDyldChainedPtrArm64eAuthBindRaw],
     Type[MachoDysymtabCommand],
     Type[MachoDyldInfoCommand],
     Type[MachoLinkeditDataCommand],
@@ -132,6 +140,7 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type["MachoDyldChainedPtr64RebaseRaw"],
     Type["MachoDyldChainedPtr64BindRaw"],
     Type["MachoBuildToolVersion"],
+
 ]
 
 
@@ -381,3 +390,19 @@ class MachoDyldChainedPtr64Rebase(ArchIndependentStructure):
 
 class MachoDyldChainedPtr64Bind(ArchIndependentStructure):
     _64_BIT_STRUCT = MachoDyldChainedPtr64BindRaw
+
+
+class MachoDyldChainedPtrArm64eRebase(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtrArm64eRebaseRaw
+
+
+class MachoDyldChainedPtrArm64eBind(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtrArm64eBindRaw
+
+
+class MachoDyldChainedPtrArm64eAuthRebase(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtrArm64eAuthRebaseRaw
+
+
+class MachoDyldChainedPtrArm64eAuthBind(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtrArm64eAuthBindRaw

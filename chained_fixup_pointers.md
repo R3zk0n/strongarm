@@ -39,23 +39,16 @@ Prior to dyld performing the operations (i.e. what strongarm sees), this is the 
 * Each pointer that is to be rebased contains a packed structure (a “fixup pointer”). This packed structure contains a few pieces of information:
 
     * The distance to the next fixup pointer
-
     * The offset to the internal pointer destination
-
     * A bit indicating that this is a rebase, not a bind
-
     * For example, the static binary will contain section.__objc_selrefs.0x100005000: 0x20000000a000
-
       * This packed structure tells us that the next fixup pointer in the chain is 2 uint32_t's away, and that the offset to the internal destination is 0xa000 bytes away
 
       * If ASLR loads the binary at 0x230000000, the pointer at 0x230005000 will be rebased to contain the address 0x23000f000.
 
 * Each pointer that is to be bound contains a packed structure (another fixup pointer, with different fields). This packed structure will contain some other information:
-
     * The distance to the next fixup pointer
-
     * An index into a table in __LINKEDIT that, when looked up, will give the symbol name and source dylib that this pointer is bound to
-
     * A bit indicating that this is a bind, not a rebase
 
 strongarm has long assumed that rebases contain valid pointers that can be followed in the static data, and not the "garbage pointer" that aa fixup appears to be at first glance. I've changed strongarm such that it now keeps track of rebase locations, and provides APIs to parse structures containing rebases and to query rebase locations.
